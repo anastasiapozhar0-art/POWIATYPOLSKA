@@ -4,20 +4,19 @@ import plotly.express as px
 import requests
 
 # 1. Налаштування сторінки
-st.set_page_config(layout="wide", page_title="Інтерактивна карта повітів")
-st.title("🗺️ Мульти-карта повітів Польщі")
+st.set_page_config(layout="wide", page_title="Карта повітів")
+st.title("🗺️ Контурна карта повітів Польщі")
 
-# 2. Завантаження карти Польщі (через стабільний CDN)
+# 2. Завантажуємо цифрові контури Польщі
 @st.cache_data
-def load_geojson_final():
+def load_geojson():
     url = "https://cdn.jsdelivr.net/gh/ganon11/Click-That-Hood@master/public/data/poland-powiats.geojson"
     try:
-        response = requests.get(url, timeout=10)
-        return response.json()
+        return requests.get(url, timeout=10).json()
     except:
         return {"type": "FeatureCollection", "features": []}
 
-geojson_data = load_geojson_final()
+geojson_data = load_geojson()
 
 # 3. Читання вашого Excel-файлу
 try:
@@ -28,59 +27,56 @@ try:
         df['POWIATY'] = df['POWIATY'].astype(str).str.strip()
         all_coviaty = sorted(df['POWIATY'].dropna().unique())
         
-        # Створюємо дві колонки для налаштувань та завантаження фото
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("✍️ Ручний вибір повітів")
-            # МУЛЬТИВИБІР: тепер тут st.multiselect замість st.selectbox
-            selected_powiats = st.multiselect(
-                "Оберіть один або декілька повітів:", 
-                options=all_coviaty,
-                default=[]
-            )
-            
-        with col2:
-            st.subheader("📸 Автоматичний пошук з фото")
-            uploaded_image = st.file_uploader("Завантажте фото зі списком повітів:", type=["png", "jpg", "jpeg"])
-            
-            if uploaded_image is not None:
-                st.image(uploaded_image, caption="Завантажене фото", width=250)
-                st.info("🔄 Функція сканування тексту підключається... Зачекайте на встановлення бібліотек.")
-                
-                # Тимчасова імітація пошуку (поки ви не підключите модуль розпізнавання тексту):
-                # Тут буде логіка штучного інтелекту, яка прочитає фото і додасть повіти у список.
+        # Пошук повітів (Мультивибір)
+        selected_powiats = st.multiselect(
+            "Введіть або оберіть повіти для підсвічування:", 
+            options=all_coviaty,
+            default=[]
+        )
 
-        # Фільтрація даних на основі обраних повітів
-        if selected_powiats:
-            filtered_df = df[df['POWIATY'].isin(selected_powiats)]
-        else:
-            filtered_df = df  # якщо нічого не обрано, показуємо все
-            
-        st.write(f"📊 Сортування активовано для повітів: {', '.join(selected_powiats) if selected_powiats else 'Всі'}")
-
-        # 5. Створення карти з РІЗНИМИ кольорами (color="POWIATY")
+        # Створюємо базову чорно-білу контурну карту (ЯК У ВОРДІ)
+        # Стиль "white-bg" прибирає ВСІ написи, міста, дороги та океани. Залишаються ТІЛЬКИ чисті контури повітів!
         fig = px.choropleth_mapbox(
-            filtered_df,
+            df, 
             geojson=geojson_data,
             locations="POWIATY",
             featureidkey="properties.name",
-            color="POWIATY",  # Сама ця строчка фарбує кожен повіт в окремий колір!
-            color_discrete_sequence=px.colors.qualitative.Bold, # Яскрава палітра кольорів
-            mapbox_style="carto-positron",
+            mapbox_style="white-bg", 
             zoom=5.5,
             center={"lat": 52.0689, "lon": 19.4796},
-            opacity=0.7,
-            labels={"POWIATY": "Повіт"}
+            opacity=1.0
         )
+        
+        # Фарбуємо всі базові контури у світло-сірий колір з темними межами
+        fig.update_traces(
+            marker_line_color="#4A4A4A", 
+            marker_line_width=1, 
+            colorscale=[[0, '#F5F5F5'], [1, '#F5F5F5']], 
+            showscale=False
+        )
+
+        # Якщо ви вписали повіти в пошук — накладаємо їх зверху КОЛЬОРОМ
+        if selected_powiats:
+            filtered_df = df[df['POWIATY'].isin(selected_powiats)]
+            
+            colored_layer = px.choropleth_mapbox(
+                filtered_df,
+                geojson=geojson_data,
+                locations="POWIATY",
+                featureidkey="properties.name",
+                color="POWIATY",
+                color_discrete_sequence=px.colors.qualitative.Bold,
+                opacity=0.9
+            )
+            
+            # Додаємо кольорові шматочки на контурну карту
+            for trace in colored_layer.data:
+                fig.add_trace(trace)
         
         fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=True)
         st.plotly_chart(fig, use_container_width=True)
         
-        # Відображення таблиці
-        st.dataframe(filtered_df)
     else:
-        st.error("У вашому Excel-файлі не знайдено колонку 'POWIATY'. Перевірте назву стовпчика.")
-        
+        st.error("У вашому Excel-файлі не знайдено колонку 'POWIATY'.")
 except Exception as e:
-    st.error(f"Не вдалося прочитати Excel-файл 'Powiaty_POLSKI.xlsx'. Помилка: {e}")
+    st.error(f"Помилка: {e}")
