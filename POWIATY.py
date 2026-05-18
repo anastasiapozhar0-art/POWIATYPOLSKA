@@ -40,7 +40,7 @@ try:
             df, 
             geojson=geojson_data,
             locations="POWIATY",
-            featureidkey="properties.name",
+            featureidkey="properties.nazwa",
             mapbox_style="white-bg", 
             zoom=5.5,
             center={"lat": 52.0689, "lon": 19.4796},
@@ -63,7 +63,7 @@ try:
                 filtered_df,
                 geojson=geojson_data,
                 locations="POWIATY",
-                featureidkey="properties.name",
+                featureidkey="properties.nazwa",
                 color="POWIATY",
                 color_discrete_sequence=px.colors.qualitative.Bold,
                 opacity=0.9
