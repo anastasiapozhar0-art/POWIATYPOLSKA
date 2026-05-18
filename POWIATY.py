@@ -1,21 +1,23 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import folium
+from streamlit_folium import st_folium
 import requests
 
 # 1. Налаштування сторінки
 st.set_page_config(layout="wide", page_title="Карта повітів")
 st.title("🗺️ Контурна карта повітів Польщі")
 
-# 2. Завантажуємо базову інтернет-карту
+# 2. Стабільне завантаження гео-контурів повітів Польщі
 @st.cache_data
 def load_geojson():
-    url = "https://cdn.jsdelivr.net/gh/ganon11/Click-That-Hood@master/public/data/poland-powiats.geojson"
+    url = "https://raw.githubusercontent.com/ganon11/Click-That-Hood/master/public/data/poland-powiats.geojson"
     try:
-        data = requests.get(url, timeout=10).json()
-        return data
-    except:
-        return {"type": "FeatureCollection", "features": []}
+        response = requests.get(url, timeout=10)
+        return response.json()
+    except Exception as e:
+        st.error(f"Не вдалося завантажити контури карти: {e}")
+        return None
 
 geojson_data = load_geojson()
 
@@ -24,72 +26,67 @@ try:
     df = pd.read_excel("Powiaty_POLSKI.xlsx")
     df.columns = [str(col).strip() for col in df.columns]
     
-    if 'POWIATY' in df.columns:
-        df['POWIATY'] = df['POWIATY'].astype(str).str.strip()
-        all_coviaty = sorted(df['POWIATY'].dropna().unique())
+    if 'POWIATY' in df.columns and geojson_data is not None:
+        # Очищення назв в Excel від слова "powiat" для точного збігу з картою
+        df['POWIATY_CLEAN'] = df['POWIATY'].astype(str).str.replace(r'^[Pp]owiat\s+', '', regex=True).str.strip().str.lower()
         
-        # Пошук повітів (Мультивибір за оригінальними назвами)
+        # Список для гарного відображення в пошуку (оригінальні назви з Excel)
+        all_powiats = sorted(df['POWIATY'].dropna().unique())
+        
+        # Віконце пошуку повітів (Мультивибір)
         selected_powiats = st.multiselect(
             "Введіть або оберіть повіти для підсвічування:", 
-            options=all_coviaty,
+            options=all_powiats,
             default=[]
         )
-
-        # --- МАГІЯ ТУТ ---
-        # Створюємо список УСІХ повітів, які є всередині карти GeoJSON, 
-        # щоб Plotly намалював їх незалежно від Excel!
-        geojson_features = geojson_data.get("features", [])
-        map_powiats = [f["properties"]["name"] for f in geojson_features if "properties" in f and "name" in f]
         
-        # Створюємо незалежну фонову таблицю для карти
-        bg_df = pd.DataFrame({"MAP_POWIATS": map_powiats})
+        # Переводимо обрані користувачем повіти в очищений формат для порівняння з картою
+        selected_clean = [str(p).replace("Powiat", "").replace("powiat", "").strip().lower() for p in selected_powiats]
 
-        # Будуємо базову чисту карту на основі гео-даних, а не Excel
-        fig = px.choropleth_mapbox(
-            bg_df, 
-            geojson=geojson_data,
-            locations="MAP_POWIATS",
-            featureidkey="properties.name",
-            mapbox_style="white-bg", 
-            zoom=5.5,
-            center={"lat": 52.0689, "lon": 19.4796},
-            opacity=1.0
-        )
+        # 4. СТВОРЕННЯ БАЗОВОЇ КАРТИ
+        # Центруємо карту на координатах Польщі
+        m = folium.Map(location=[52.0689, 19.4796], zoom_start=6, tiles=None)
         
-        # Робимо фонову карту чисто білою з чіткими сірими контурами повітів
-        fig.update_traces(
-            marker_line_color="#7F7F7F", 
-            marker_line_width=1, 
-            colorscale=[[0, '#FFFFFF'], [1, '#FFFFFF']], 
-            showscale=False
-        )
+        # Робимо повністю чисте біле тло для карти (без міст, доріг та океанів)
+        folium.TileLayer(
+            tiles='https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+            attr='CartoDB',
+            name='Чисте тло'
+        ).add_to(m)
 
-        # Якщо ви вписали повіти в пошук — накладаємо їх зверху КОЛЬОРОМ
-        if selected_powiats:
-            filtered_df = df[df['POWIATY'].isin(selected_powiats)].copy()
-            
-            # Робимо копію назви для збігу з картою (прибираємо "powiat " і робимо першу літеру великою/малою)
-            # Карта в інтернеті містить назви типу "krakowski", "poznański" (з малої літери)
-            filtered_df['MAP_LINK'] = filtered_df['POWIATY'].str.replace(r'^[Pp]owiat\s+', '', regex=True).str.strip().str.lower()
-            
-            colored_layer = px.choropleth_mapbox(
-                filtered_df,
-                geojson=geojson_data,
-                locations="MAP_LINK",
-                featureidkey="properties.name",
-                color="POWIATY",
-                color_discrete_sequence=px.colors.qualitative.Bold,
-                opacity=0.9
-            )
-            
-            # Додаємо кольорові шматочки на контурну карту
-            for trace in colored_layer.data:
-                fig.add_trace(trace)
-        
-        fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, showlegend=True)
-        st.plotly_chart(fig, use_container_width=True)
+        # 5. ФУНКЦІЯ ФАРБУВАННЯ КОНТУРІВ
+        # Ця функція перевіряє кожен повіт на карті: якщо він обраний в пошуку — робить кольоровим, якщо ні — білим із сірою межею
+        def style_function(feature):
+            name = feature['properties'].get('name', '').strip().lower()
+            if name in selected_clean:
+                # Кольорове підсвічування для обраних повітів (яскраво-червоний/малиновий колір)
+                return {
+                    'fillColor': '#FF2A6D',
+                    'color': '#FF2A6D',
+                    'weight': 2,
+                    'fillOpacity': 0.7
+                }
+            else:
+                # Базовий вигляд карти: білі повіти з чіткими сірими контурами
+                return {
+                    'fillColor': '#FFFFFF',
+                    'color': '#7F7F7F',
+                    'weight': 1,
+                    'fillOpacity': 1.0
+                }
+
+        # Накладаємо контури повітрів на карту з нашою функцією стилю
+        folium.GeoJson(
+            geojson_data,
+            style_function=style_function,
+            tooltip=folium.GeoJsonTooltip(fields=['name'], aliases=['Повіт:'])
+        ).add_to(m)
+
+        # Відображаємо карту на сторінці Streamlit
+        st_folium(m, width=1000, height=600, returned_objects=[])
         
     else:
-        st.error("У вашому Excel-файлі не знайдено колонку 'POWIATY'.")
+        if 'POWIATY' not in df.columns:
+            st.error("У вашому Excel-файлі не знайдено колонку 'POWIATY'.")
 except Exception as e:
-    st.error(f"Помилка: {e}")
+    st.error(f"Помилка виконання: {e}")
