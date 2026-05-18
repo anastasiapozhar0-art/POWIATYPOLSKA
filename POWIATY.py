@@ -4,12 +4,13 @@ import plotly.express as px
 import requests
 
 # 1. Налаштування зовнішнього вигляду сторінки
-st.set_page_config(layout="wide", page_title="Mapa powiatów")
+st.set_page_config(layout="wide", page_title="Карта повітів")
 st.title("Powiaty Polski")
 
 # 2. Завантаження цифрових меж Польщі з інтернету
 @st.cache_data
 def load_geojson():
+    # Використовуємо стабільне робоче посилання
     url = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/poland-powiats.geojson"
     return requests.get(url).json()
 
@@ -19,43 +20,39 @@ geojson_data = load_geojson()
 try:
     df = pd.read_excel("Powiaty_POLSKI.xlsx")
     
-    if 'poviat' in df.columns:
-        all_poviats = sorted(df['poviat'].unique())
+    if 'powiat' in df.columns:
+        all_coviaty = sorted(df['powiat'].unique())
         
         # 4. Створення віконця пошуку повітів
-        selected_poviats = st.multiselect(
-            "Nazwa Powiat",
-            options=all_poviats,
-            default=[all_poviats[0]] if all_poviats else None
-        )
+        selected_powiat = st.selectbox("Оберіть повіт для перегляду:", ["Всі повіти"] + all_coviaty)
         
-        # 5. Логіка підсвічування: якщо повіт вибрано — статус один, якщо ні — інший
-        df['status'] = df['poviat'].apply(lambda x: 'Шуканий повіт' if x in selected_poviats else 'Інші регіони')
-        
-        # 6. Малювання та налаштування інтерактивної карти
+        # Фільтрація даних
+        if selected_powiat != "Всі повіти":
+            filtered_df = df[df['powiat'] == selected_powiat]
+        else:
+            filtered_df = df
+            
+        # 5. Створення та відображення карти
         fig = px.choropleth_mapbox(
-            df,
+            filtered_df,
             geojson=geojson_data,
-            locations="poviat",
-            featureidkey="properties.nazwa",
-            color="status",
-            color_discrete_map={"Шуканий повіт": "#EF4444", "Інші регіони": "#E2E8F0"},
+            locations="powiat",
+            featureidkey="properties.name",
+            color_discrete_sequence=["#FF4B4B"],
             mapbox_style="carto-positron",
-            zoom=5.6,
-            center={"lat": 52.06, "lon": 19.47},
-            opacity=0.75,
-            hover_data=list(df.columns)
+            zoom=5.5,
+            center={"lat": 52.0689, "lon": 19.4796},
+            opacity=0.6,
+            labels={"powiat": "Повіт"}
         )
-        fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=600)
         
-        # Відображення карти на екрані сайту
+        fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         st.plotly_chart(fig, use_container_width=True)
         
-        # 7. Відображення таблиці з вашими даними під картою
-        st.markdown("Informacja powiatu")
-        filtered_df = df[df['poviat'].isin(selected_poviats)]
-        st.dataframe(filtered_df.drop(columns=['status'], errors='ignore'), use_container_width=True)
+        # Відображення таблиці під картою
+        st.dataframe(filtered_df)
     else:
-        st.error("Помилка: В Excel немає колонки з назвою 'poviat'")
-except FileNotFoundError:
-    st.error("Помилка: Не знайдено файл 'data.xlsx' в папці сайту.")
+        st.error("У вашому Excel-файлі немає колонки з назвою 'powiat'. Перевірте файл.")
+        
+except Exception as e:
+    st.error(f"Не вдалося прочитати Excel-файл. Перевірте назву. Помилка: {e}")
