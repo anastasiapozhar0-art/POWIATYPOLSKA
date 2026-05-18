@@ -9,11 +9,11 @@ st.title("Powiaty Polski")
 
 # 2. Завантаження цифрових меж Польщі (офіційне робоче джерело)
 @st.cache_data
-def load_geojson():
+def load_geojson_new():
     url = "https://raw.githubusercontent.com/ganon11/Click-That-Hood/master/public/data/poland-powiats.geojson"
     return requests.get(url).json()
 
-geojson_data = load_geojson()
+geojson_data = load_geojson_new()
 
 # 3. Читання вашого Excel-файлу
 try:
