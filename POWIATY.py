@@ -26,7 +26,7 @@ try:
     df = pd.read_excel("Powiaty_POLSKI.xlsx")
     
     if 'powiat' in df.columns:
-        all_coviaty = sorted(df['powiat'].unique())
+        all_coviaty = sorted(df['POWIATY'].unique())
         
         # 4. Випадаючий список для пошуку повітів
         selected_powiat = st.selectbox("Оберіть повіт для перегляду:", ["Всі повіти"] + all_coviaty)
