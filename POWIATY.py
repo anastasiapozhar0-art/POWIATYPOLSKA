@@ -4,7 +4,7 @@ import plotly.express as px
 import requests
 
 # 1. Налаштування зовнішнього вигляду сторінки
-st.set_page_config(layout="wide", page_title="Карта повітів")
+st.set_page_config(layout="wide", page_title="Mapa powiatów")
 st.title("Powiaty Polski")
 
 # 2. Завантаження цифрових меж Польщі з інтернету
@@ -17,7 +17,7 @@ geojson_data = load_geojson()
 
 # 3. Читання вашого Excel-файлу
 try:
-    df = pd.read_excel("data.xlsx")
+    df = pd.read_excel("Powiaty_POLSKI.xlsx")
     
     if 'poviat' in df.columns:
         all_poviats = sorted(df['poviat'].unique())
