@@ -7,7 +7,7 @@ import requests
 st.set_page_config(layout="wide", page_title="Карта повітів")
 st.title("🗺️ Контурна карта повітів Польщі")
 
-# 2. Завантажуємо цифрові контури Польщі
+# 2. Завантажуємо базову інтернет-карту
 @st.cache_data
 def load_geojson():
     url = "https://cdn.jsdelivr.net/gh/ganon11/Click-That-Hood@master/public/data/poland-powiats.geojson"
@@ -24,7 +24,13 @@ try:
     df.columns = [str(col).strip() for col in df.columns]
     
     if 'POWIATY' in df.columns:
+        # ПЕРЕТВОРЕННЯ: перетворюємо в текст і прибираємо зайві пробіли
         df['POWIATY'] = df['POWIATY'].astype(str).str.strip()
+        
+        # МАГІЯ ТУТ: автоматично прибираємо слово "Powiat " або "powiat " з початку назви
+        # Очиститься і для пошуку, і для збігу з картою
+        df['POWIATY'] = df['POWIATY'].str.replace(r'^[Pp]owiat\s+', '', regex=True)
+        
         all_coviaty = sorted(df['POWIATY'].dropna().unique())
         
         # Пошук повітів (Мультивибір)
@@ -34,24 +40,23 @@ try:
             default=[]
         )
 
-        # Створюємо базову чорно-білу контурну карту (ЯК У ВОРДІ)
-        # Стиль "white-bg" прибирає ВСІ написи, міста, дороги та океани. Залишаються ТІЛЬКИ чисті контури повітів!
+        # Створюємо базову чисту контурну карту (без написів міст)
         fig = px.choropleth_mapbox(
             df, 
             geojson=geojson_data,
             locations="POWIATY",
-            featureidkey="properties.nazwa",
+            featureidkey="properties.name", # Тепер назви типу "krakowski" ідеально збігатимуться
             mapbox_style="white-bg", 
             zoom=5.5,
             center={"lat": 52.0689, "lon": 19.4796},
             opacity=1.0
         )
         
-        # Фарбуємо всі базові контури у світло-сірий колір з темними межами
+        # Робимо фонову карту чисто білою з чіткими сірими контурами повітів
         fig.update_traces(
-            marker_line_color="#4A4A4A", 
+            marker_line_color="#7F7F7F", 
             marker_line_width=1, 
-            colorscale=[[0, '#F5F5F5'], [1, '#F5F5F5']], 
+            colorscale=[[0, '#FFFFFF'], [1, '#FFFFFF']], 
             showscale=False
         )
 
@@ -63,7 +68,7 @@ try:
                 filtered_df,
                 geojson=geojson_data,
                 locations="POWIATY",
-                featureidkey="properties.nazwa",
+                featureidkey="properties.name",
                 color="POWIATY",
                 color_discrete_sequence=px.colors.qualitative.Bold,
                 opacity=0.9
