@@ -25,15 +25,16 @@ geojson_data = load_geojson_final()
 try:
     df = pd.read_excel("Powiaty_POLSKI.xlsx")
     
-    if 'powiat' in df.columns:
-        all_coviaty = sorted(df['POWIATY'].unique())
+  if 'POWIATY' in df.columns:
+        # Створюємо список усіх повітів з вашої колонки POWIATY
+        all_coviaty = sorted(df['POWIATY'].dropna().unique())
         
         # 4. Випадаючий список для пошуку повітів
         selected_powiat = st.selectbox("Оберіть повіт для перегляду:", ["Всі повіти"] + all_coviaty)
         
-        # Фільтрація даних
+        # Фільтрація даних відповідно до вибору
         if selected_powiat != "Всі повіти":
-            filtered_df = df[df['powiat'] == selected_powiat]
+            filtered_df = df[df['POWIATY'] == selected_powiat]
         else:
             filtered_df = df
             
