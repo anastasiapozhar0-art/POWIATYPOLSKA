@@ -3,15 +3,14 @@ import pandas as pd
 import plotly.express as px
 import requests
 
-# 1. Налаштування зовнішнього вигляду сторінки
+# 1. Налаштування сторінки
 st.set_page_config(layout="wide", page_title="Карта повітів")
 st.title("Powiaty Polski")
 
-# 2. Завантаження цифрових меж Польщі з інтернету
+# 2. Завантаження цифрових меж Польщі (офіційне робоче джерело)
 @st.cache_data
 def load_geojson():
-    # Використовуємо стабільне робоче посилання
-    url = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/poland-powiats.geojson"
+    url = "https://raw.githubusercontent.com/ganon11/Click-That-Hood/master/public/data/poland-powiats.geojson"
     return requests.get(url).json()
 
 geojson_data = load_geojson()
@@ -23,7 +22,7 @@ try:
     if 'powiat' in df.columns:
         all_coviaty = sorted(df['powiat'].unique())
         
-        # 4. Створення віконця пошуку повітів
+        # 4. Випадаючий список для пошуку повітів
         selected_powiat = st.selectbox("Оберіть повіт для перегляду:", ["Всі повіти"] + all_coviaty)
         
         # Фільтрація даних
@@ -32,7 +31,7 @@ try:
         else:
             filtered_df = df
             
-        # 5. Створення та відображення карти
+        # 5. Створення та відображення карти Plotly
         fig = px.choropleth_mapbox(
             filtered_df,
             geojson=geojson_data,
@@ -49,10 +48,10 @@ try:
         fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         st.plotly_chart(fig, use_container_width=True)
         
-        # Відображення таблиці під картою
+        # Відображення вашої таблиці Excel під картою
         st.dataframe(filtered_df)
     else:
-        st.error("У вашому Excel-файлі немає колонки з назвою 'powiat'. Перевірте файл.")
+        st.error("У вашому Excel-файлі немає колонки з назвою 'powiat'. Перевірте назву стовпчика.")
         
 except Exception as e:
-    st.error(f"Не вдалося прочитати Excel-файл. Перевірте назву. Помилка: {e}")
+    st.error(f"Не вдалося прочитати Excel-файл 'Powiaty_POLSKI.xlsx'. Перевірте його наявність. Помилка: {e}")
