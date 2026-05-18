@@ -5,7 +5,7 @@ import requests
 
 # 1. Налаштування зовнішнього вигляду сторінки
 st.set_page_config(layout="wide", page_title="Карта повітів")
-st.title("🗺️ Мій сайт: Пошук повітів Польщі")
+st.title("Powiaty Polski")
 
 # 2. Завантаження цифрових меж Польщі з інтернету
 @st.cache_data
@@ -24,7 +24,7 @@ try:
         
         # 4. Створення віконця пошуку повітів
         selected_poviats = st.multiselect(
-            "🔎 Почніть вводити назву одного або кількох повітів:",
+            "Nazwa Powiat",
             options=all_poviats,
             default=[all_poviats[0]] if all_poviats else None
         )
@@ -52,7 +52,7 @@ try:
         st.plotly_chart(fig, use_container_width=True)
         
         # 7. Відображення таблиці з вашими даними під картою
-        st.markdown("### 📊 Інформація з вашої бази даних:")
+        st.markdown("Informacja powiatu")
         filtered_df = df[df['poviat'].isin(selected_poviats)]
         st.dataframe(filtered_df.drop(columns=['status'], errors='ignore'), use_container_width=True)
     else:
