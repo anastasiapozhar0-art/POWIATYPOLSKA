@@ -10,7 +10,7 @@ st.title("Powiaty Polski")
 # 2. Завантаження цифрових меж Польщі з інтернету
 @st.cache_data
 def load_geojson():
-    url = "https://raw.githubusercontent.com/bswiatlowski/poland-geojson/master/powiaty/powiaty-min.geojson"
+   url = "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/poland-powiats.geojson"
     return requests.get(url).json()
 
 geojson_data = load_geojson()
