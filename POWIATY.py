@@ -7,7 +7,7 @@ import os
 st.set_page_config(layout="wide", page_title="Контурна карта")
 st.title("🗺️ Комбінована контурна карта повітів Польщі")
 
-# Назва вашої базової (чистої) карти-підкладки
+# Назва вашої базової карти-підкладки
 BASE_MAP_PATH = "my_contour_map.png" 
 
 # 2. Читання вашого Excel-файлу
@@ -19,38 +19,63 @@ try:
         df['POWIATY'] = df['POWIATY'].astype(str).str.strip()
         all_powiats = sorted(df['POWIATY'].dropna().unique())
         
-        # Віконце пошуку повітів (Мультивибір)
+        # Віконце пошуку повітів
         selected_powiats = st.multiselect(
             "Введіть або оберіть повіти для підсвічування:", 
             options=all_powiats,
             default=[]
         )
         
-        # 3. Логіка склеювання шарів
+        # 3. Логіка склеювання шарів (малюнок на малюнок)
         if os.path.exists(BASE_MAP_PATH):
             base_image = Image.open(BASE_MAP_PATH).convert("RGBA")
             combined_image = base_image.copy()
             
             # Проходимо по кожному обраному в пошуку повіту
             for powiat_name in selected_powiats:
-                # Перетворюємо назву: "Powiat Krakowski" -> "krakowski.png"
-                # Замінюємо польські літери на звичайні, якщо ви так називали файли (наприклад, ó -> o, ł -> l)
-                clean_name = powiat_name.replace("Powiat", "").replace("powiat", "").strip().lower()
-                clean_name = clean_name.replace("ó", "o").replace("ł", "l").replace("ą", "a")
-                clean_name = clean_name.replace("ę", "e").replace("ś", "s").replace("ź", "z")
-                clean_name = clean_name.replace("ż", "z").replace("ć", "c").replace("ń", "n")
+                orig_name = powiat_name.strip() # Наприклад: "Powiat jasielski"
                 
-                # Прибираємо пробіли, якщо у назві два слова (наприклад, "dabrowski" чи "bielskobiala")
-                clean_name = clean_name.replace(" ", "")
+                # Чиста назва без слова "powiat": "jasielski"
+                clean_name = orig_name.replace("Powiat", "").replace("powiat", "").strip()
                 
-                powiat_file = f"{clean_name}.png"
+                # Замінюємо польські літери на звичайні латинські
+                def remove_polish_chars(text):
+                    replacements = {'ó': 'o', 'ł': 'l', 'ą': 'a', 'ę': 'e', 'ś': 's', 'ź': 'z', 'ż': 'z', 'ć': 'c', 'ń': 'n',
+                                    'Ó': 'O', 'Ł': 'L', 'Ą': 'A', 'Ę': 'E', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z', 'Ć': 'C', 'Ń': 'N'}
+                    for src, dst in replacements.items():
+                        text = text.replace(src, dst)
+                    return text
                 
-                # Якщо картинка є — накладаємо її
-                if os.path.exists(powiat_file):
-                    powiat_image = Image.open(powiat_file).convert("RGBA")
+                clean_lat = remove_polish_chars(clean_name)
+                orig_lat = remove_polish_chars(orig_name)
+                
+                # Створюємо різні варіанти написання назв файлів (разом, через пробіл, через підкреслення)
+                possible_filenames = [
+                    f"{clean_lat.lower().replace(' ', '_')}.png",  # jasielski.png або такий варіант
+                    f"powiat_{clean_lat.lower().replace(' ', '_')}.png",  # powiat_jasielski.png (Ваш варіант!)
+                    f"{clean_lat.lower().replace(' ', '')}.png",   # jasielski.png
+                    f"{orig_lat.lower().replace(' ', '')}.png",    # powiatjasielski.png
+                    f"{orig_lat.lower().replace(' ', '_')}.png",   # powiat_jasielski.png
+                    f"Powiat_{clean_lat.replace(' ', '_')}.png",   # Powiat_Jasielski.png
+                    
+                    # Те саме, тільки якщо розширення файлу великими літерами .PNG
+                    f"powiat_{clean_lat.lower().replace(' ', '_')}.PNG",
+                    f"{clean_lat.lower().replace(' ', '_')}.PNG"
+                ]
+                
+                # Шукаємо, яка саме картинка збігається
+                found_file = None
+                for filename in possible_filenames:
+                    if os.path.exists(filename):
+                        found_file = filename
+                        break
+                
+                # Якщо знайшли файл повіту — накладаємо його
+                if found_file:
+                    powiat_image = Image.open(found_file).convert("RGBA")
                     combined_image = Image.alpha_composite(combined_image, powiat_image)
             
-            # 4. Виводимо фінальну карту на екран
+            # 4. Виводимо готову карту на екран
             st.image(combined_image, caption="Ваша інтерактивна контурна карта", use_column_width=True)
             
         else:
