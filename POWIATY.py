@@ -13,10 +13,6 @@ def load_geojson():
     url = "https://cdn.jsdelivr.net/gh/ganon11/Click-That-Hood@master/public/data/poland-powiats.geojson"
     try:
         data = requests.get(url, timeout=10).json()
-        # Приводимо назви повітів у GEOJSON до нижнього регістру для ідеального збігу
-        for feature in data.get("features", []):
-            name = feature["properties"].get("name", "")
-            feature["properties"]["name_clean"] = str(name).strip().lower()
         return data
     except:
         return {"type": "FeatureCollection", "features": []}
@@ -29,26 +25,31 @@ try:
     df.columns = [str(col).strip() for col in df.columns]
     
     if 'POWIATY' in df.columns:
-        # Створюємо оригінальну колонку для відображення у списку (щоб користувач бачив гарні назви)
         df['POWIATY'] = df['POWIATY'].astype(str).str.strip()
         all_coviaty = sorted(df['POWIATY'].dropna().unique())
         
-        # Створюємо СЛУЖБОВУ колонку для точного збігу з картою (очищаємо від "powiat" і робимо літери малими)
-        df['POWIATY_MATCH'] = df['POWIATY'].str.replace(r'^[Pp]owiat\s+', '', regex=True).str.strip().str.lower()
-        
-        # Пошук повітів (Мультивибір за гарними назвами)
+        # Пошук повітів (Мультивибір за оригінальними назвами)
         selected_powiats = st.multiselect(
             "Введіть або оберіть повіти для підсвічування:", 
             options=all_coviaty,
             default=[]
         )
 
-        # Створюємо базову чисту контурну карту (без написів міст)
+        # --- МАГІЯ ТУТ ---
+        # Створюємо список УСІХ повітів, які є всередині карти GeoJSON, 
+        # щоб Plotly намалював їх незалежно від Excel!
+        geojson_features = geojson_data.get("features", [])
+        map_powiats = [f["properties"]["name"] for f in geojson_features if "properties" in f and "name" in f]
+        
+        # Створюємо незалежну фонову таблицю для карти
+        bg_df = pd.DataFrame({"MAP_POWIATS": map_powiats})
+
+        # Будуємо базову чисту карту на основі гео-даних, а не Excel
         fig = px.choropleth_mapbox(
-            df, 
+            bg_df, 
             geojson=geojson_data,
-            locations="POWIATY_MATCH",       # Шукаємо за очищеним службовим полем
-            featureidkey="properties.name_clean", # Порівнюємо з очищеним полем карти
+            locations="MAP_POWIATS",
+            featureidkey="properties.name",
             mapbox_style="white-bg", 
             zoom=5.5,
             center={"lat": 52.0689, "lon": 19.4796},
@@ -65,13 +66,17 @@ try:
 
         # Якщо ви вписали повіти в пошук — накладаємо їх зверху КОЛЬОРОМ
         if selected_powiats:
-            filtered_df = df[df['POWIATY'].isin(selected_powiats)]
+            filtered_df = df[df['POWIATY'].isin(selected_powiats)].copy()
+            
+            # Робимо копію назви для збігу з картою (прибираємо "powiat " і робимо першу літеру великою/малою)
+            # Карта в інтернеті містить назви типу "krakowski", "poznański" (з малої літери)
+            filtered_df['MAP_LINK'] = filtered_df['POWIATY'].str.replace(r'^[Pp]owiat\s+', '', regex=True).str.strip().str.lower()
             
             colored_layer = px.choropleth_mapbox(
                 filtered_df,
                 geojson=geojson_data,
-                locations="POWIATY_MATCH",
-                featureidkey="properties.name_clean",
+                locations="MAP_LINK",
+                featureidkey="properties.name",
                 color="POWIATY",
                 color_discrete_sequence=px.colors.qualitative.Bold,
                 opacity=0.9
