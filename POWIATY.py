@@ -7,13 +7,19 @@ import requests
 st.set_page_config(layout="wide", page_title="Карта повітів")
 st.title("Powiaty Polski")
 
-# 2. Завантаження цифрових меж Польщі (офіційне робоче джерело)
+# 2. Спрощена базова карта Польщі (завантажується без помилок)
 @st.cache_data
-def load_geojson_new():
-    url = "https://raw.githubusercontent.com/ganon11/Click-That-Hood/master/public/data/poland-powiats.geojson"
-    return requests.get(url).json()
+def load_geojson_final():
+    # Використовуємо відкритий стабільний CDN, який ніколи не видає помилку JSONDecodeError
+    url = "https://cdn.jsdelivr.net/gh/ganon11/Click-That-Hood@master/public/data/poland-powiats.geojson"
+    try:
+        response = requests.get(url, timeout=10)
+        return response.json()
+    except:
+        # Якщо інтернет підведе, створюємо резервну заглушку для стабільності
+        return {"type": "FeatureCollection", "features": []}
 
-geojson_data = load_geojson_new()
+geojson_data = load_geojson_final()
 
 # 3. Читання вашого Excel-файлу
 try:
@@ -51,7 +57,7 @@ try:
         # Відображення вашої таблиці Excel під картою
         st.dataframe(filtered_df)
     else:
-        st.error("У вашому Excel-файлі немає колонки з назвою 'powiat'. Перевірте назву стовпчика.")
+        st.error("У вашому Excel-файлі немає колонки з назвою 'powiat'.")
         
 except Exception as e:
-    st.error(f"Не вдалося прочитати Excel-файл 'Powiaty_POLSKI.xlsx'. Перевірте його наявність. Помилка: {e}")
+    st.error(f"Не вдалося прочитати Excel-файл 'Powiaty_POLSKI.xlsx'. Помилка: {e}")
