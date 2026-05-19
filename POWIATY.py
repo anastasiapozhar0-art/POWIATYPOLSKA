@@ -3,16 +3,8 @@ import pandas as pd
 from PIL import Image
 import os
 
-# Спробуємо підключити сканер тексту. Якщо сервер ще вантажить його - сайт не впаде
-try:
-    import easyocr
-    import numpy as np
-    reader = easyocr.Reader(['pl', 'en'], gpu=False) # Польська та англійська мови
-except:
-    reader = None
-
-st.set_page_config(layout="wide", page_title="Розумна контурна карта")
-st.title("📸 Смарт-карта повітів Польщі зі сканером")
+st.set_page_config(layout="wide", page_title="Контурна карта повітів")
+st.title("🗺️ Комбінована контурна карта повітів Польщі")
 
 BASE_MAP_PATH = "my_contour_map.png" 
 
@@ -24,70 +16,37 @@ try:
         df['POWIATY'] = df['POWIATY'].astype(str).str.strip()
         all_powiats = sorted(df['POWIATY'].dropna().unique())
         
-        # --- БЛОК СКАНЕРА З ФОТО ---
-        st.subheader("🤖 Крок 1: Відскануйте текст з фото (опціонально)")
-        uploaded_file = st.file_uploader("Натисніть, щоб зробити фото камери або завантажити картинку з телефона", type=["png", "jpg", "jpeg"])
-        
-        scanned_powiats = []
-        if uploaded_file is not None:
-            if reader is None:
-                st.warning("🔄 Робот-сканер ще налаштовується на сервері. Будь ласка, зачекайте хвилину або виберіть повіти вручну нижче.")
-            else:
-                with st.spinner("🔍 Робот читає текст на фото... зачекайте секунду..."):
-                    img = Image.open(uploaded_file)
-                    img_np = np.array(img)
-                    # Зчитуємо весь текст з картинки
-                    results = reader.readtext(img_np, detail=0)
-                    full_text = " ".join(results).lower()
-                    
-                    # Шукаємо, які повіти з нашого Excel згадуються в тексті на фото
-                    for p_name in all_powiats:
-                        clean_p = p_name.replace("Powiat", "").replace("powiat", "").strip().lower()
-                        if clean_p in full_text and len(clean_p) > 3:
-                            scanned_powiats.append(p_name)
-                    
-                    if scanned_powiats:
-                        st.success(f"✅ Знайдено на фото повіти: {', '.join(scanned_powiats)}")
-                    else:
-                        st.info("ℹ️ Текст розпізнано, але назв повітів з вашого Excel там не знайдено.")
-
-        # --- БЛОК ПОШУКУ ТА КАРТИ ---
-        st.subheader("🗺️ Крок 2: Перегляд карти та ручний пошук")
-        
-        # Об'єднуємо повіти з фото та ті, що ви можете додати ручним пошуком
+        # Віконце пошуку повітів
         selected_powiats = st.multiselect(
-            "Тут відображаються повіти (ви можете додати інші вручну):", 
+            "Введіть або оберіть повіти для підсвічування:", 
             options=all_powiats,
-            default=scanned_powiats
+            default=[]
         )
         
-        # Логіка склеювання шарів картинок
         if os.path.exists(BASE_MAP_PATH):
             base_image = Image.open(BASE_MAP_PATH).convert("RGBA")
             combined_image = base_image.copy()
             
             for powiat_name in selected_powiats:
                 orig_name = powiat_name.strip()
-                clean_name = orig_name.replace("Powiat", "").replace("powiat", "").strip()
                 
+                # Очищення назви під ваш формат "powiat_назва.png"
+                clean_name = orig_name.lower().replace("powiat", "").strip().replace(" ", "")
+                
+                # Заміна польських літер
                 def remove_polish_chars(text):
-                    replacements = {'ó': 'o', 'ł': 'l', 'ą': 'a', 'ę': 'e', 'ś': 's', 'ź': 'z', 'ż': 'z', 'ć': 'c', 'ń': 'n',
-                                    'Ó': 'O', 'Ł': 'L', 'Ą': 'A', 'Ę': 'E', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z', 'Ć': 'C', 'Ń': 'N'}
+                    replacements = {'ó': 'o', 'ł': 'l', 'ą': 'a', 'ę': 'e', 'ś': 's', 'ź': 'z', 'ż': 'z', 'ć': 'c', 'ń': 'n'}
                     for src, dst in replacements.items():
                         text = text.replace(src, dst)
                     return text
                 
                 clean_lat = remove_polish_chars(clean_name)
-                orig_lat = remove_polish_chars(orig_name)
                 
                 possible_filenames = [
-                    f"powiat_{clean_lat.lower().replace(' ', '_')}.png", # powiat_jasielski.png
-                    f"{clean_lat.lower().replace(' ', '_')}.png",
-                    f"{clean_lat.lower().replace(' ', '')}.png",
-                    f"{orig_lat.lower().replace(' ', '')}.png",
-                    f"{orig_lat.lower().replace(' ', '_')}.png",
-                    f"powiat_{clean_lat.lower().replace(' ', '_')}.PNG",
-                    f"{clean_lat.lower().replace(' ', '_')}.PNG"
+                    f"powiat_{clean_lat}.png",
+                    f"{clean_lat}.png",
+                    f"powiat_{clean_lat}.PNG",
+                    f"{clean_lat}.PNG"
                 ]
                 
                 found_file = None
@@ -98,11 +57,27 @@ try:
                 
                 if found_file:
                     powiat_image = Image.open(found_file).convert("RGBA")
+                    
+                    # --- МАГІЯ: Робимо чисто білий фон повністю прозорим ---
+                    datas = powiat_image.getdata()
+                    new_data = []
+                    for item in datas:
+                        # Якщо піксель білий (або майже білий), міняємо його на прозорий
+                        if item[0] > 240 and item[1] > 240 and item[2] > 240:
+                            new_data.append((255, 255, 255, 0)) # 0 - повна прозорість
+                        else:
+                            new_data.append(item)
+                    powiat_image.putdata(new_data)
+                    
+                    # Накладаємо очищений повіт на карту
                     combined_image = Image.alpha_composite(combined_image, powiat_image)
             
-            st.image(combined_image, caption="Ваша оновлена карта", use_column_width=True)
-        else:
-            st.error(f"Завантажте чисту карту під назвою '{BASE_MAP_PATH}'")
+            # Виводимо фінальну карту
+            st.image(combined_image, caption="Ваша інтерактивна карта", use_column_width=True)
             
+        else:
+            st.error(f"Не знайдено базову карту під назвою '{BASE_MAP_PATH}'")
+    else:
+        st.error("У вашому Excel-файлі не знайдено колонку 'POWIATY'.")
 except Exception as e:
-    st.error(f"Помилка: {e}")
+    st.error(f"Помилка роботи програми: {e}")
