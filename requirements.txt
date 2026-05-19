@@ -1,2 +1,5 @@
-folium
-streamlit-folium
+pandas
+Pillow
+openpyxl
+easyocr
+numpy
